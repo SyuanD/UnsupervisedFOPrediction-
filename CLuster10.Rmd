@@ -1,0 +1,1008 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+```{r message=FALSE}
+library(readr)
+library(dplyr)
+library("readxl")
+library(tidyverse)
+library(data.table)
+library(utils)
+library(purrr)
+library(RVenn)
+library(venn)
+library(VennDiagram)
+library(ggplot2)
+library(ggpolypath)
+```
+
+```{r message=FALSE, warning=FALSE}
+setwd("~/Library/CloudStorage/OneDrive-UniversityofGeorgia/ShiyuanD/DataProcessing")
+```
+
+```{r message=FALSE, warning=FALSE}
+fo<-readRDS(file='fo.rds')
+fo<-fo%>%mutate(fo1.1=ifelse(fluid_overload_volume >= 1.1,1,0))%>%mutate(fo1.07=ifelse(fluid_overload_volume >= 1.07,1,0))%>%
+  dplyr::select(PATIENT_DEID,fluid_overload_volume,fo1.1,fo1.07)
+```
+
+```{r}
+fo1<-fo%>%filter(fo1.07==1)
+IQR(fo1$fluid_overload_volume)
+summary((fo1$fluid_overload_volume))
+fo0<-fo%>%filter(fo1.07==0)
+IQR(fo0$fluid_overload_volume)
+summary((fo0$fluid_overload_volume))
+```
+
+
+```{r message=FALSE}
+Cluster10 <- read_csv("numbers.csv", col_names = TRUE)
+colnames(Cluster10)<-paste0('Cluster',1:10)
+```
+
+```{r}
+M<-read_csv("Mat_Med3.csv", col_names = TRUE)
+```
+
+```{r message=FALSE}
+C10<-Venn(Cluster10)
+library(ggVennDiagram)
+p1<-ggVennDiagram(Cluster10[,1:5],label = 'count')
+p2<-ggVennDiagram(Cluster10[,6:10],label = 'count')
+p1
+p2
+```
+
+
+```{r}
+clustMed10<-list()
+for (i in 1:10) {
+  #i=1
+  cluster1<-na.omit(Cluster10[,i])
+  Med<-c()
+  Time<-c()
+  for (j in 1:length(t(cluster1))) {
+    chr<-str_split(cluster1[j,], "@")[[1]]
+    Med[j]<-chr[1]
+    Time[j]<-as.numeric(chr[2])
+  }
+  Set1<-as.data.frame(cbind(Med,Time))
+  clustMed10[[i]]<-Set1
+}
+```
+
+```{r}
+Medicine<-NULL
+length(Medicine)<-574
+for (i in 1:10) {
+  #i=1
+  t<-clustMed10[[i]]$Med
+  length(t)<-574
+  Medicine<-cbind(Medicine,t)
+}
+colnames(Medicine)<-paste0('Clust',1:10)
+MedUnique<-apply(Medicine, 2, unique)
+MedUnique1<-as.data.frame(do.call(cbind, MedUnique))
+```
+```{r}
+n.obs <- sapply(MedUnique, length)
+seq.max <- seq_len(max(n.obs))
+MedUnique1 <- sapply(MedUnique, "[", i = seq.max)
+write.csv(MedUnique1,'MedUnique1.csv')
+
+K<-unlist(MedUnique)
+K<-unique(K)
+write.csv(K,'allMed.csv')
+```
+
+```{r}
+Common<-MedUnique$Clust1
+for (i in 1:10) {
+  Common<-intersect(Common,MedUnique[[i]])
+}
+Common
+
+write.csv(Common, "IntersectMed10Clust.csv", row.names=FALSE)
+```
+```{r}
+t<-c()
+for (i in 1:10) {
+  t[i]<-sum(na.omit(Cluster10[,i]!='NA'))
+}
+t
+IQR(t)
+summary(t)
+```
+
+# ALl med with classes
+```{r}
+Classes<-read.csv('Allmedwithclasses.csv')[,-1]
+colnames(Classes)<-c('Med','Medclass')
+Classes<-drop_na(Classes)
+unique(Classes$Medclass)
+```
+```{r}
+ClassFreq<-list()
+for (i in 1:10) {
+ d<-dim(clustMed10[[i]])
+ Class1<-left_join(clustMed10[[i]],Classes,by='Med')
+ c1<-table(Class1$Medclass)/d[1]*100
+ c1<-as.data.frame(c1)
+ colnames(c1)<-c('Medclass','Freq')
+ ClassFreq[[i]]<-c1
+}
+
+
+FreqT<-reduce(ClassFreq, full_join, by = 'Medclass') %>% replace(., is.na(.), 0)
+colnames(FreqT)[2:11]<-paste0('Cluster',1:10)
+colSums(FreqT[,2:11])
+write.csv(FreqT, "ClassFreq.csv", row.names=TRUE)
+```
+
+
+
+
+
+```{r}
+reorder_size <- function(x) {
+  factor(x, levels = names(sort(table(x), decreasing = TRUE)))
+}
+```
+
+
+# Clsuter 7
+```{r}
+d<-clustMed10[[7]]
+d$Time<-as.numeric(d$Time)
+d$TimeSlot[d$Time==1]<-'0-3hrs'
+d$TimeSlot[d$Time==2]<-'3-6hrs'
+d$TimeSlot[d$Time==3]<-'6-9hrs'
+d$TimeSlot[d$Time==4]<-'9-12hrs'
+d$TimeSlot[d$Time==5]<-'12-15hrs'
+d$TimeSlot[d$Time==6]<-'15-18hrs'
+d$TimeSlot[d$Time==7]<-'18-21hrs'
+d$TimeSlot[d$Time==8]<-'21-24hrs'
+d$TimeSlot[d$Time==9]<-'24-27hrs'
+d$TimeSlot[d$Time==10]<-'27-30hrs'
+d$TimeSlot[d$Time==11]<-'30-33hrs'
+d$TimeSlot[d$Time==12]<-'33-36hrs'
+d$TimeSlot[d$Time==13]<-'36-39hrs'
+d$TimeSlot[d$Time==14]<-'39-42hrs'
+d$TimeSlot[d$Time==15]<-'42-45hrs'
+d$TimeSlot[d$Time==16]<-'45-48hrs'
+d$TimeSlot[d$Time==17]<-'48-51hrs'
+d$TimeSlot[d$Time==18]<-'51-54hrs'
+d$TimeSlot[d$Time==19]<-'54-57hrs'
+d$TimeSlot[d$Time==20]<-'57-60hrs'
+d$TimeSlot[d$Time==21]<-'60-63hrs'
+d$TimeSlot[d$Time==22]<-'63-66hrs'
+d$TimeSlot[d$Time==23]<-'66-69hrs'
+d$TimeSlot[d$Time==24]<-'69-72hrs'
+
+d1<-d[order(d$Time),]
+```
+
+```{r}
+d1$count<-rep(1,length(d1)[1])
+d1$abbrevMed<- abbreviate(d1$Med, minlength = 10)
+d1$day <- with(d1, ifelse(Time > 16, 3,
+                         ifelse(Time > 8, 2, 1)))
+d1%>%arrange(TimeSlot,abbrevMed)
+```
+
+```{r}
+p<-ggplot(d1, aes(x = abbrevMed, y =reorder(TimeSlot,Time, decreasing=FALSE), fill = day)) +
+  geom_tile(color = "black") +
+  #scale_fill_gradient(low = "white", high = "red") +
+  coord_fixed()+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+ 
+  theme(
+         panel.background = element_rect(fill='transparent'),
+         plot.background = element_rect(fill='transparent', color=NA),
+         panel.grid.major = element_blank(),
+         panel.grid.minor = element_blank(),
+         legend.background = element_rect(fill='transparent'),
+         legend.box.background = element_rect(fill='transparent')
+       )+
+   labs(x='Medicine',y='TimeSlot',title='Cluster7')
+
+p
+```
+
+```{r}
+ddd<-d1%>%pivot_wider(names_from = TimeSlot,values_from =day )
+#heatmap(as.matrix(ddd[,5:28]))
+
+NewSet<-d1[,c('Med',"TimeSlot",'day')]
+write.csv(NewSet,'NewSet.csv')
+```
+
+
+
+```{r}
+dd<-d1[,c('Med','TimeSlot')]
+dd$count<-rep(1,dim(dd)[1])
+ddd<-dd%>%pivot_wider(names_from = TimeSlot,values_from =count,values_fill = 0 )
+
+md<-apply(ddd[,-1], 2, as.numeric)
+#library(SparseM)
+#image(as.matrix.csr(md))
+#library(plot.matrix)
+#plot(md)
+
+
+abbrv <-  abbreviate(ddd$Med, minlength = 10)
+rownames(md)<-abbrv
+
+Day1med<-md[,1:8]
+rownames(Day1med)<-abbrv
+
+dd1<-d1%>%filter(Time<=8)
+dd1<-dd1[,c('Med','TimeSlot')]
+dd1$count<-rep(1,dim(dd1)[1])
+dd1$Med<-abbreviate(dd1$Med, minlength = 10)
+
+
+
+ggplot(dd1, aes(y = Med, x = TimeSlot, fill = count)) +
+  geom_tile(color = "black") +
+  scale_fill_gradient(low = "white", high = "red") +
+  coord_fixed()+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+
+
+```
+
+
+```{r}
+p<-ggplot(data =d1,aes(x = reorder_size(`abbrevMed`), fill =TimeSlot )) +
+  geom_bar()+
+ # geom_text(stat='count', aes(label=..count..), position = position_stack(vjust = 0.5),size=4)+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
+  labs(x='Medicine',y='TimeSlotCount',title='Cluster7')+ #x=element_blank())element_text(angle = 45, hjust = .8)
+  scale_fill_discrete(breaks=c('0-3hrs','3-6hrs','6-9hrs','9-12hrs','12-15hrs','15-18hrs','18-21hrs','21-24hrs',
+                        '24-27hrs','27-30hrs','30-33hrs','33-36hrs','36-39hrs','39-42hrs','42-45hrs','45-48hrs',
+                        '48-51hrs','51-54hrs','54-57hrs','57-60hrs','60-63hrs','63-66hrs','66-69hrs','69-72hrs'))+
+   theme(
+         panel.background = element_rect(fill='transparent'),
+         plot.background = element_rect(fill='transparent', color=NA),
+         panel.grid.major = element_blank(),
+         panel.grid.minor = element_blank(),
+         legend.background = element_rect(fill='transparent'),
+         legend.box.background = element_rect(fill='transparent')
+       )
+p
+```
+
+
+```{r}
+d %>%
+  # now required with changes to dplyr::count()
+  dplyr::count(Med,Time) %>% 
+  group_by(Med)%>%
+  mutate(prop = prop.table(n))
+
+#summary 
+byMed<-d%>%dplyr::count(Med)%>%mutate(prop = prop.table(n))
+byMed0<-byMed[,c('Med','n')]
+colnames(byMed0)<-c('Medication','TimeSlot Frequency')
+
+write.csv(byMed0,'SummaryClust7byMed0.csv')
+
+byTime<-d%>%dplyr::count(Time)%>%mutate(prop = prop.table(n))
+#at time=5(16,17,18hrs)
+
+write.csv(byTime,'SummaryClust7byTime.csv')
+```
+# Clusters 10 Found
+```{r}
+clusters_found <- read_csv("countclust10.csv")
+
+colnames(clusters_found)<-c('Patient',paste0('Clust',1:10))
+Clusters<-clusters_found[,2:11]
+
+f<-readRDS('MedWide_72_1IV4.0.rds')
+Clusters$'PATIENT_DEID'<-f$PATIENT_DEID
+FOCL<-left_join(Clusters,fo,by='PATIENT_DEID')
+```
+
+```{r}
+M<-FOCL[,c('Clust5','fo1.07')]
+t0<-M[which(M$fo1.07=='0'),1]
+summary(t0)
+mean(t0)
+t00<-as.numeric(unlist(t0))
+#hist(t00)
+t1<-M[which(M$fo1.07=='1'),1]
+summary(t1)
+t11<-as.numeric(unlist(t1))
+wilcox.test(t00,t11)
+
+```
+```{r}
+clusters_found <- read_csv("clusters_found.csv")
+colnames(clusters_found)<-c('Patient',paste0('Clust',1:10))
+Clusters<-clusters_found[,2:11]
+
+f<-readRDS('MedWide_72_1IV4.0.rds')
+Clusters$'PATIENT_DEID'<-f$PATIENT_DEID
+FOCL1<-left_join(Clusters,fo,by='PATIENT_DEID')
+```
+
+```{r}
+a1<-FOCL1$Clust1
+a2<-FOCL1$Clust2
+a3<-FOCL1$Clust3
+a4<-FOCL1$Clust4
+a5<-FOCL1$Clust5
+a6<-FOCL1$Clust6
+a7<-FOCL1$Clust7
+a8<-FOCL1$Clust8
+a9<-FOCL1$Clust9
+a10<-FOCL1$Clust10
+a<-FOCL1$fo1.07
+wilcox.test(a1~as.factor(a))
+wilcox.test(a2~as.factor(a))
+wilcox.test(a3~as.factor(a))
+wilcox.test(a4~as.factor(a))
+wilcox.test(a5~as.factor(a))
+wilcox.test(a6~as.factor(a))
+wilcox.test(a7~as.factor(a))
+wilcox.test(a8~as.factor(a))
+wilcox.test(a9~as.factor(a))
+wilcox.test(a10~as.factor(a))
+## Clust5 and Clust7
+mean5.0<-as.data.frame(FOCL1[which(FOCL1$fo1.07==0),1:10])
+mean5.1<-FOCL1[which(FOCL1$fo1.07==1),1:10]
+
+rbind(apply(na.omit(mean5.0),2,mean),apply(na.omit(mean5.1),2,mean))
+
+
+```
+
+
+
+## calculate IQR
+```{r}
+f1<-f[,-1]
+colnames(f1)<-NULL
+
+typeof(f1)
+f1<-as.data.frame(f1)
+
+t<-apply(f1,2,as.numeric)
+t[is.na(t)]<-0
+record<-apply(t,1,sum)
+summary(record)
+
+t[1,]13-65
+```
+
+
+# Logic Model
+```{r}
+FOCL1$fo1.07<-as.factor(FOCL1$fo1.07)
+m1<-glm(fo1.07~Clust1+Clust2+Clust3+Clust4+Clust5+
+               Clust6+Clust7+Clust8+Clust9+Clust10,
+               data = FOCL1,family = "binomial")
+
+m1<-glm(fo1.07~Clust1,
+               data = FOCL1,family = "binomial")
+m2<-glm(fo1.07~Clust2,
+               data = FOCL1,family = "binomial")
+m3<-glm(fo1.07~Clust3,
+               data = FOCL1,family = "binomial")
+m4<-glm(fo1.07~Clust4,
+               data = FOCL1,family = "binomial")
+m5<-glm(fo1.07~Clust5,
+               data = FOCL1,family = "binomial")
+m6<-glm(fo1.07~Clust6,
+               data = FOCL1,family = "binomial")
+m7<-glm(fo1.07~Clust7,
+               data = FOCL1,family = "binomial")
+m8<-glm(fo1.07~Clust8,
+               data = FOCL1,family = "binomial")
+m9<-glm(fo1.07~Clust9,
+               data = FOCL1,family = "binomial")
+m10<-glm(fo1.07~Clust10,
+               data = FOCL1,family = "binomial")
+summary(m5)
+m7<-glm(fo1.07~Clust7,
+               data = FOCL1,family = "binomial")
+summary(m7)
+
+#Var FO or not (ind Test)
+
+#d1 %>%
+#  group_by(fo1.07) %>%
+#  t_test(data =., fo1.07 ~ Clust1) %>%
+#  adjust_pvalue(method = "bonferroni") %>%
+#  add_significance("p.adj")
+```
+
+
+# Significant Cluster
+```{r}
+d<-table(FOCL1$fo1.07)
+d
+Pie<-pie(d,labels = c('No FO',"FO"),col = c('lightyellow','lightblue'),
+    main="Fluid Overload")
+Pie
+png("foPie.png", width = 465, height = 225, units='mm', res = 300)
+pie(d,labels = c('No FO',"FO"),col = c('lightyellow','lightblue'),
+    main="Fluid Overload")
+dev.off ()
+```
+
+```{r}
+d<-clustMed10[[7]]
+byMed<-d%>%dplyr::count(Med)%>%mutate(prop = prop.table(n))
+byTime<-d1%>%dplyr::count(TimeSlot)%>%mutate(prop = prop.table(n))
+byMed1<-byMed%>%filter(n>=5)
+png("byMedOver5.png", width = 465, height = 225, units='mm', res = 300)
+ggplot(data = byMed1, aes(x = "", y = n, fill = Med)) + 
+  geom_bar(stat = "identity") + 
+  coord_polar("y")
+dev.off ()
+
+png("byTime.png", width = 465, height = 225, units='mm', res = 300)
+ggplot(data = byTime, aes(x = "", y = n, fill = Time)) + 
+  geom_bar(stat = "identity") + 
+  coord_polar("y")
+dev.off()
+```
+
+```{r}
+nn<-cbind(c('0-3hrs','3-6hrs','6-9hrs','9-12hrs','12-15hrs','15-18hrs','18-21hrs','21-24hrs','24-27hrs','27-30hrs','30-33hrs','33-36hrs','36-39hrs','39-42hrs','42-45hrs','45-48hrs','48-51hrs','51-54hrs','54-57hrs','57-60hrs','60-63hrs','63-66hrs','66-69hrs','69-72hrs'),c('T1','T2','T3','T4','T5','T6','T7','T8','T9','T10','T11','T12','T13','T14','T15','T16','T17','T18','T19','T20','T21','T22','T23','T24'))
+colnames(nn)<-c('TimeSlot','TimeP')
+nn<-as.data.frame(nn)
+byTime<-left_join(byTime,nn,by='TimeSlot')
+
+p<-ggplot(data = byTime, aes(x = "", y = -n, fill = TimeSlot)) + 
+  geom_bar(stat = "identity", color = "black") +
+  labs(title = "Cluster 7 Medications distribution over 72 hours") +
+  coord_polar("y") +geom_text(aes(label=paste0(byTime$TimeP,'-',byTime$n)),
+            position = position_stack(vjust = .5),size=2)+
+  theme_void()+scale_fill_discrete(breaks=c('0-3hrs','3-6hrs','6-9hrs','9-12hrs','12-15hrs','15-18hrs','18-21hrs','21-24hrs',
+                        '24-27hrs','27-30hrs','30-33hrs','33-36hrs','36-39hrs','39-42hrs','42-45hrs','45-48hrs',
+                        '48-51hrs','51-54hrs','54-57hrs','57-60hrs','60-63hrs','63-66hrs','66-69hrs','69-72hrs'))
+p
+```
+
+```{r}
+
+p<-ggplot(data = byTime, aes(x = "", y = -n, fill = TimeSlot)) + 
+  geom_bar(stat = "identity", color = "black") +
+  labs(title = "Cluster 7 Medications distribution over 72 hours") +
+  coord_polar("y") +geom_text(aes(label = TimeSlot:n),
+            position = position_stack(vjust = .5))+ theme_void()+
+    scale_y_continuous(breaks = byTime$prop, labels = byTime$TimeSlot)+
+ scale_fill_discrete(breaks=c('0-3hrs','3-6hrs','6-9hrs','9-12hrs','12-15hrs','15-18hrs','18-21hrs','21-24hrs',
+                        '24-27hrs','27-30hrs','30-33hrs','33-36hrs','36-39hrs','39-42hrs','42-45hrs','45-48hrs',
+                        '48-51hrs','51-54hrs','54-57hrs','57-60hrs','60-63hrs','63-66hrs','66-69hrs','69-72hrs'),labels = byTime$TimeSlot)
+p
+
+
+```
+
+
+```{r}
+D1<-d1%>%filter(day==1)
+D2<-d1%>%filter(day==2)
+D3<-d1%>%filter(day==3)
+D1<-unique(D1$Med)
+length(D1)<-99
+D2<-unique(D2$Med)
+length(D2)<-99
+D3<-unique(D3$Med)
+length(D3)<-99
+ThreeDay<-cbind(D1,D2,D3)
+colnames(ThreeDay)<-c('Day1','Day2','Day3')
+ write.csv(ThreeDay,'ThreedayClust7.csv')
+```
+
+
+
+
+
+
+```{r}
+ggplot(data = byMed1, aes(x = "", y = -n, fill = Med)) + 
+  geom_bar(stat = "identity", color = "black") +
+  labs(title = "Medicine in CLuster 7 Count Over 5") +
+  coord_polar("y") +
+  theme_void()
+```
+
+```{r}
+d2<-d%>%filter(Med %in% byMed1$Med)
+p<-ggplot(data =d2,aes(x = reorder_size(`Med`), fill =Time  )) +
+  geom_bar()+
+ # geom_text(stat='count', aes(label=..count..), position = position_stack(vjust = 0.5),size=4)+
+  theme(axis.text.x=element_text(angle = 45, hjust = 1))+
+  labs(x='Medicine',y='TimeSlotCount',title='Cluster1') #x=element_blank())element_text(angle = 45, hjust = .8)
+p
+```
+
+
+```{r}
+d
+d24<-d%>%filter(Time<=8)
+
+differ<-d%>%filter(Med %in% d24$Med)
+
+c<-intersect(d$Med,d24$Med)
+d24$
+  
+#Only in first 24 hours
+#Distribution of Med in the first 24hrs and the last 24hrs
+  
+```
+
+
+
+```{r}
+#T test
+p<-rep(0,10)
+for (i in 1:10) {
+  #i=1
+  Y<-FOCL1%>%filter(fo1.07=='1')
+  Y<-unlist(Y[[i]])
+  N<-FOCL1%>%filter(fo1.07=='0')
+  N<-unlist(N[[i]])
+  L<-t.test(Y,N,paired = FALSE)
+  p[i]<-L$p.value
+}
+p
+which(p<=0.05)
+
+
+```
+
+# CLuster 1 5 6 7 Still works on 7
+```{r}
+#1
+#first 24 hours
+d1<-clustMed10[[7]]
+d1$Time<-as.numeric(d1$Time)
+
+d1.24Y<-d1%>%filter(Time<=8)
+d1.24N<-d1%>%filter(Time>8)
+c<-intersect(d1.24Y$Med,d1.24N$Med)
+unique24<-d1.24Y%>%filter(! Med %in% c)
+unique24
+write.csv(unique24,'Day1inClust7unique.csv')
+
+d1.72Y<-d1%>%filter(Time>16)
+d1.72N<-d1%>%filter(Time<=16)
+c<-intersect(d1.72Y$Med,d1.72N$Med)
+unique72<-d1.72Y%>%filter(! Med %in% c)
+unique72
+write.csv(unique72,'Day3inClust7unique.csv')
+```
+
+```{r}
+FOCL1$fo1.07<-as.factor(FOCL1$fo1.07)
+m1<-glm(fo1.07~Clust1,
+               data = FOCL1,family = "binomial")
+summary(m1)
+```
+
+```{r}
+FOCL1$fo1.07<-as.factor(FOCL1$fo1.07)
+m1<-glm(fo1.07~Clust2,
+               data = FOCL1,family = "binomial")
+summary(m1)
+```
+
+# Demographic Features
+```{r}
+masterT<-read_excel("Master Table_Data Dictionary_12.2.22.xlsx")
+colnames(masterT)[1]<-'PATIENT_DEID'
+Features<-masterT%>%select(
+ c("PATIENT_DEID", "Age @ ICU Admission", "Sex", "Race",
+   "ICU Type","Admission Diagnosis, Broad Category",
+   "MV during ICU","Vasopressor in ICU Stay",
+   "APACHE II - 24 hours","SOFA - 24 hours",
+   "Hospital Mortality",
+   "ICU Length of Stay"))
+colnames(Features)<-c("PATIENT_DEID", "Age", "Sex", "Race",
+   "ICU Type","Admission Diagnosis",
+   "Use of mechanical ventilation","Use of vasopressors ",
+   "APACHE II at 24h","SOFA at 24h",
+   "Mortality",
+   "ICU Length of Stay")
+```
+
+```{r}
+ModelData<-FOCL1%>%inner_join(Features,by='PATIENT_DEID')
+ModelData<-ModelData%>%drop_na(fo1.07)
+ModelData$fo1.07<-as.factor(ModelData$fo1.07)
+summary(ModelData$Age)
+table(ModelData$Sex)
+table(ModelData$Race)
+table(ModelData$`ICU Type`)
+table(ModelData$`Admission Diagnosis`)
+table(ModelData$`Use of mechanical ventilation`)
+table(ModelData$`Use of vasopressors `)
+summary(na.omit(as.numeric(ModelData$`APACHE II at 24h`)))
+summary(ModelData$`SOFA at 24h`)
+table(ModelData$Mortality)
+summary(ModelData$`ICU Length of Stay`)
+```
+
+```{r}
+t.test(Age~fo1.07,data=ModelData)
+chisq.test(ModelData$Sex,ModelData$fo1.07)
+chisq.test(ModelData$Race,ModelData$fo1.07)
+chisq.test(ModelData$`ICU Type`,ModelData$fo1.07)
+chisq.test(ModelData$`Admission Diagnosis`,ModelData$fo1.07)
+chisq.test(ModelData$`Use of mechanical ventilation`,ModelData$fo1.07)
+chisq.test(ModelData$`Use of vasopressors `,ModelData$fo1.07)
+```
+```{r}
+ModelData<-FOCL1%>%inner_join(Features,by='PATIENT_DEID')
+ModelData<-ModelData%>%drop_na(fo1.07)
+ModelData$fo1.07<-as.factor(ModelData$fo1.07)
+ModelData<-ModelData%>%filter(fo1.07==1)
+summary(ModelData$Age)
+table(ModelData$Sex)
+table(ModelData$Race)
+table(ModelData$`ICU Type`)
+table(ModelData$`Admission Diagnosis`)
+table(ModelData$`Use of mechanical ventilation`)
+table(ModelData$`Use of vasopressors `)
+summary(na.omit(as.numeric(ModelData$`APACHE II at 24h`)))
+summary(ModelData$`SOFA at 24h`)
+table(ModelData$Mortality)
+summary(ModelData$`ICU Length of Stay`)
+```
+
+```{r}
+ModelData<-FOCL1%>%inner_join(Features,by='PATIENT_DEID')
+ModelData<-ModelData%>%drop_na(fo1.07)
+ModelData$fo1.07<-as.factor(ModelData$fo1.07)
+ModelData<-ModelData%>%filter(fo1.07==0)
+summary(ModelData$Age)
+table(ModelData$Sex)
+table(ModelData$Race)
+table(ModelData$`ICU Type`)
+table(ModelData$`Admission Diagnosis`)
+table(ModelData$`Use of mechanical ventilation`)
+table(ModelData$`Use of vasopressors `)
+summary(na.omit(as.numeric(ModelData$`APACHE II at 24h`)))
+summary(ModelData$`SOFA at 24h`)
+table(ModelData$Mortality)
+summary(ModelData$`ICU Length of Stay`)
+```
+#Logistic Regressions
+
+```{r}
+Modelfeatures<-read.csv("data_fluid.overload_v2.csv")
+LogModelData<-FOCL1%>%inner_join(Modelfeatures,by='PATIENT_DEID')
+LogModelData<-LogModelData%>%drop_na(fo1.07)
+LogModelData<-LogModelData%>%mutate('Age'=case_when(age_at_time>=65~'1',
+         age_at_time<65~'0'                                                ))
+LogModelData<-LogModelData%>%mutate('Admission_Diagnosis'=case_when(Coded_Diagnosis%in%"Sepsis"~1,
+         !Coded_Diagnosis%in%"Sepsis"~0                                               ))
+LogModelData$max_Bicarbonate_24h<-as.factor(LogModelData$max_Bicarbonate_24h)
+LogModelData<-LogModelData%>%mutate('Clust7Prop'=Clust7*fluid_overload_volume)
+LogModelData<-LogModelData%>%mutate('Clust1Prop'=Clust1*fluid_overload_volume)
+LogModelData<-LogModelData%>%mutate('Clust5Prop'=Clust5*fluid_overload_volume)
+```
+
+```{r}
+M1<-glm(fo1.07~SEX+Admission_Diagnosis+
+          SOFA_24h_score+max_Bicarbonate_24h+
+        APACHE_24h_score+Age,
+        data=LogModelData,family = "binomial")
+summary(M1)
+
+## odds ratios and 95% CI
+exp(cbind(OR = coef(M1), confint(M1)))
+```
+```{r}
+
+M2<-glm(fo1.07~SEX+Admission_Diagnosis+
+          SOFA_24h_score+max_Bicarbonate_24h+
+        APACHE_24h_score+Age+Clust7,
+        data=LogModelData,family = "binomial")
+summary(M2)
+
+M2.1<-glm(fo1.07~SEX+Admission_Diagnosis+
+          SOFA_24h_score+max_Bicarbonate_24h+
+        APACHE_24h_score+Age+Clust7Prop,
+        data=LogModelData,family = "binomial")
+
+summary(M2.1)
+
+M2.1.0<-glm(fo1.07~SEX+Admission_Diagnosis+
+          SOFA_24h_score+max_Bicarbonate_24h+
+        APACHE_24h_score+Age+Clust1Prop,
+        data=LogModelData,family = "binomial")
+summary(M2.1.0)
+
+M3.1.0<-glm(fo1.07~SEX+Admission_Diagnosis+
+          SOFA_24h_score+max_Bicarbonate_24h+
+        APACHE_24h_score+Age+Clust5Prop,
+        data=LogModelData,family = "binomial")
+summary(M3.1.0)
+## odds ratios and 95% CI
+exp(cbind(OR = coef(M2), confint(M2)))
+```
+
+```{r}
+M3<-glm(fo1.07~SEX+Admission_Diagnosis+
+          SOFA_24h_score+max_Bicarbonate_24h+
+        APACHE_24h_score+Age+Clust5Prop+Clust7Prop,
+        data=LogModelData,family = "binomial")
+summary(M3)
+
+## odds ratios and 95% CI
+exp(cbind(OR = coef(M3), confint(M3)))
+```
+
+```{r}
+anova(M1,M2)
+anova(M2,M3)
+```
+
+```{r}
+#install.packages("pROC")
+library(pROC)
+probabilities1 <- predict(M1, type = "response", newdata = LogModelData)
+probabilities2 <- predict(M2, type = "response", newdata = LogModelData)
+probabilities3 <- predict(M3, type = "response", newdata = LogModelData)
+
+# Create ROC curves for each model
+roc1 <- roc(LogModelData$fo1.07, probabilities1)
+roc2 <- roc(LogModelData$fo1.07, probabilities2)
+roc3 <- roc(LogModelData$fo1.07, probabilities3)
+
+auc(roc1)
+auc(roc2)
+auc(roc3)
+
+# Plot the ROC curves on the same plot
+plot(roc1, col = "red")
+lines(roc2, col = "blue")
+
+# Add a legend to the plot
+legend("bottomright", legend = c("Model 1", "Model 2","Model 3"),
+       col = c("red", "blue",'green'), lty = 1)
+```
+
+```{r}
+mat<-LogModelData[,1:10]*LogModelData$fluid_overload_volume
+cc<-cor(na.omit(mat))
+
+corrplot::corrplot(cc)
+
+cc1<-cor(na.omit(LogModelData[,1:10]))
+corrplot::corrplot(cc1)
+cc1
+cor(LogModelData$Clust5,LogModelData$Clust7)
+```
+
+
+
+
+
+```{r}
+clustMed<-list()
+for(i in 1:10){
+  #i=9
+  cluster1<-na.omit(Cluster10[,i])
+  c1<-as.data.frame(strsplit(cluster1,"@"))
+  rownames(c1)<-c('Med','TimeSlot')
+  c1<-t(c1)
+  c1<-as.data.frame(c1)
+  clustMed[[i]]<-as.data.frame(table(c1$'Med'))
+}
+```
+
+
+```{r warning=FALSE}
+medicine100<-NULL
+for (i in 1:10) {
+  t<-as.character(clustMed[[i]]$Var1)
+  medicine100<-cbind(medicine100,t)
+}
+colnames(medicine100)<-paste0('Clust',1:10)
+medicine100<-as.data.frame(medicine100)
+```
+
+```{r}
+Common<-medicine100$Clust1
+for (i in 1:10) {
+  Common<-intersect(Common,medicine100[,i])
+}
+Common
+as.data.frame(Common)
+write.csv(Common,file='102MedinCommon.csv',row.names=F)
+```
+
+```{r}
+med<-sub(" .*", "",Common)
+unique(med)
+unique(med)
+```
+
+```{r}
+data3hour<-readRDS(file = "MedWide_72_1IV4.0.rds")
+dataset<-inner_join(data3hour,fo,by='PATIENT_DEID')
+dataset<-dataset%>%replace(is.na(.), 0)
+```
+
+```{r}
+library(kernlab)
+```
+
+```{r}
+library(Rdimtools)
+X<-dataset[,2:2230]
+X<-apply(X,2,as.numeric)
+Y2<-dataset[,2232]
+Y1<-apply(Y1,2,as.numeric)
+Y2<-dataset[,2233]
+Y2<-apply(Y2,2,as.numeric)
+#out1<-do.spc(X,Y1,threshold=200)
+```
+
+
+
+
+
+
+
+
+
+
+
+#Supervised PC
+
+```{r}
+library(superpc)
+X<-dataset[,2:2230]
+X<-apply(X,2,as.numeric)
+#X<-as.data.frame(X)
+Y2<-dataset[,2232]
+Y1<-apply(Y1,2,as.numeric)
+Y2<-dataset[,2233]
+Y2<-apply(Y2,2,as.numeric)
+Y<-cbind(as.factor(Y1),as.factor(Y2))
+foo <- superpc.decorrelate(t(X),Y)
+
+data <- list(x=t(X), 
+             y=y, 
+             censoring.status=censoring.status, 
+             featurenames=featurenames)
+a <- superpc.train(data, type="survival")
+```
+```{r}
+data_ls <- list(
+    x = t(X),
+    y = dataset$fluid_overload_volume,
+    censoring.status = as.logical(dataset$fo1.07),
+    featurenames = colnames(X)
+  )
+m1<-superpc.train(
+    data = data_ls,
+    type = "surv"
+  )
+s1<-as.data.frame(m1$feature.scores)
+s1<-cbind(colnames(X),s1)
+s1<-as.data.frame(s1)
+colnames(s1)<-c('Name','featureScore')
+summary(s1)
+#write.csv(s1,file='featureScore.csv',row.names=T)
+
+s1.0<-s1%>%filter(abs(featureScore)>=1)
+s1.0
+s1.5<-s1%>%filter(abs(featureScore)>=1.5)
+s1.5
+```
+```{r}
+data_ls <- list(
+    x = t(X),
+    y = dataset$fluid_overload_volume,
+    censoring.status = as.logical(dataset$fo1.1),
+    featurenames = colnames(X)
+  )
+m2<-superpc.train(
+    data = data_ls,
+    type = "surv"
+  )
+s1<-as.data.frame(m1$feature.scores)
+s1<-cbind(colnames(X),s1)
+s1<-as.data.frame(s1)
+colnames(s1)<-c('Name','featureScore')
+summary(s1)
+#write.csv(s1,file='featureScore.csv',row.names=T)
+
+s1.0<-s1%>%filter(abs(featureScore)>=1)
+s1.0
+
+s1.5<-s1%>%filter(abs(featureScore)>=1.5)
+s1.5
+```
+
+
+
+
+
+```{r}
+library(pathwayPCA)
+m2<-glmTrain_fun(X,as.logical(Y1))
+
+```
+
+```{r}
+ data("colon_pathwayCollection")
+  data("colonSurv_df")
+  
+  colon_OmicsSurv <- CreateOmics(
+    assayData_df = colonSurv_df[,-(2:3)],
+    pathwayCollection_ls = colon_pathwayCollection,
+    response = colonSurv_df[, 1:3],
+    respType = "surv"
+  )
+  
+  asthmaGenes_char <-
+    getTrimPathwayCollection(colon_OmicsSurv)[["KEGG_ASTHMA"]]$IDs
+    
+  data_ls <- list(
+    x = t(getAssay(colon_OmicsSurv))[asthmaGenes_char, ],
+    y = getEventTime(colon_OmicsSurv),
+    censoring.status = getEvent(colon_OmicsSurv),
+    featurenames = asthmaGenes_char
+  )
+  
+  superpc.train(
+    data = data_ls,
+    type = "surv"
+  )
+```
+
+
+
+
+
+```{r}
+library(corrplot)
+Cor<-cor(Clusters)
+corrplot(Cor)
+```
+
+```{r}
+heatmap(Day1med, Rowv = NA, Colv = NA)
+image(Day1med)
+
+library(tidyr)
+library(dplyr)
+library(ggplot2)
+
+Day1med<-as.tibble(Day1med)
+
+Day1med %>% mutate(Med = rownames(Day1med)) %>%
+  pivot_longer(-Med) %>%
+  ggplot(aes(x = Med, y = reorder(name, desc(name)), fill = as.factor(value)))+
+  geom_tile()+
+  scale_fill_manual(name = "Code", values = c("red","blue"))+
+  labs(y = "")
+
+library(ggplot2)
+```
+
+
+
+
+
+
+
+
