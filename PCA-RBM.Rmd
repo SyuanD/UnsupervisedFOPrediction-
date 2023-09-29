@@ -1,0 +1,126 @@
+---
+title: "PCA-RBM"
+output: html_document
+date: "2023-05-15"
+---
+
+```{r}
+setwd("~/Library/CloudStorage/OneDrive-UniversityofGeorgia/ShiyuanD/DataProcessing")
+library(dplyr)
+library(tidyverse)
+library(rpca)
+library(rospca)
+library(rrcov)
+library(PMA)
+library("FactoMineR")
+library("factoextra")
+library(logisticPCA)
+library(ggplot2)
+library(rARPACK)
+library(deepnet)
+```
+
+## Data Preparation
+```{r}
+## 3hourData
+MedWide_72<-readRDS(file = "MedWide_72_1IV4.0.rds")
+Mat_Med3<-MedWide_72
+PatientList<-MedWide_72$PATIENT_DEID
+Mat_Med3<-apply(Mat_Med3, 2, as.numeric)[,-1]
+Mat_Med3[is.na(Mat_Med3)]<-0
+```
+
+## 3-hour binary data
+```{r}
+#Here is binary data
+Mat_Med3.0<-replace(Mat_Med3,Mat_Med3>0,1)
+dim(Mat_Med3.0)#942 2229
+head(as.data.frame(Mat_Med3.0))
+```
+```{r}
+#First, conduct a PCA
+Mat_Med3.1<-t(Mat_Med3.0)
+colnames(Mat_Med3.1)<-PatientList
+sum(Mat_Med3.1)#26677/2099718=0.01270504
+#cdplot(Mat_Med3.1)
+#Mat_Med3.1<-apply(Mat_Med3.1, 2, as.numeric)
+N<-colSums(Mat_Med3.1==0)
+Y<-colSums(Mat_Med3.1==1)
+freqYN<-as.matrix(rbind(Y,N))
+heatmap(freqYN,Colv = FALSE,Rowv = FALSE)
+```
+
+
+## PCA
+```{r}
+Pca1<-rpca(Mat_Med3.1)
+Pca2<-PCA(Mat_Med3.1)
+Pca2<-PCA()
+summary(Pca2)
+Pcs<-Pca2$var
+```
+
+
+#MCA
+```{r}
+#install.packages(c("FactoMineR", "factoextra"))#package needed for MCA
+Mat_Med3.2<-replace(Mat_Med3.1,Mat_Med3.1==0,'N')
+Mat_Med3.2<-replace(Mat_Med3.2,Mat_Med3.2==1,'Y')
+Mat_Med3.2<-as.data.frame(Mat_Med3.2)
+mca1<-MCA(Mat_Med3.2,ncp = 150,graph = FALSE)
+eig.val <- get_eigenvalue(mca1)
+var <- get_mca_var(mca1)
+fviz_screeplot(mca1, addlabels = TRUE, ylim = c(0, 10))
+#fviz_mca_biplot(mca1, 
+#               repel = TRUE, # Avoid text overlapping (slow if many point)
+#               ggtheme = theme_minimal())
+
+fviz_mca_var(mca1, col.var = "cos2",
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"), 
+             repel = TRUE, # Avoid text overlapping
+             ggtheme = theme_minimal())
+macPcs<-var$coord
+res.desc <- dimdesc(mca1, axes = c(1,2))
+view(res.desc[[1]])
+```
+
+## Sparse PCA
+```{r}
+cv.out <- SPC.cv(Mat_Med3.1, sumabsvs=seq(1.2, sqrt(ncol(Mat_Med3.1)), len=6))
+print(cv.out)
+plot(cv.out)
+cv.out$bestsumabsv#24.79361 
+out <- SPC(Mat_Med3.1,sumabsv=cv.out$bestsumabsv, K=200)
+out$prop.var.explained
+saveRDS(out,file = 'PCAresult1.rds')
+out<-readRDS(file ='PCAresult1.rds' )
+out$prop.var.explained #174pcs
+PC<-round(out$v,4)[,1:174]
+dim(PC)
+PC1<-PC[,1]
+sum(PC==0)# 10782
+heatmap(PC,Colv = FALSE,Rowv = FALSE)
+```
+
+
+## Logistic PCA/SVD
+```{r}
+logsvd_model = logisticSVD(Mat_Med3.1, k = 50)
+logpca_model = logisticPCA(Mat_Med3.1, k = 150)
+```
+
+```{r}
+logPCs<-logpca_model$PCs
+heatmap(logPCs,Colv = FALSE,Rowv = FALSE)
+```
+## RBM
+```{r}
+r1<-rbm.train(logPCs,30, numepochs = 20, cd = 10)
+View(r1$W)
+
+r2<-rbm.train(t(PC),30, numepochs = 20, cd = 10)
+View(r2$W)
+
+r3<-rbm
+```
+

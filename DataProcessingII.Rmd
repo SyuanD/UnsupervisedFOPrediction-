@@ -1,0 +1,129 @@
+---
+title: "72HoursDataProcessII"
+author: "Shiyuan Deng"
+output: html_notebook
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+suppressMessages(library("dplyr"))
+suppressMessages(library("tidyverse"))
+suppressMessages(library("purrr"))
+suppressMessages(library('readxl'))
+suppressMessages(library('openxlsx'))
+```
+
+```{r}
+setwd("C:/Users/sd24973/OneDrive - University of Georgia/ShiyuanD/DataProcessing")
+data_med=read.csv("meds_w_order_inst.csv",header=T,na.strings="")
+data_med_use=na.omit(data_med[,c("PATIENT_DEID","ORDER_INST_DEID","DESCRIPTION","NAME","ROUTE","FREQ_NAME","MAR_TAKEN_TIME_DEID")])
+data_ICU_time=read.csv("ICU Stay Time.csv")%>%
+  dplyr::select(-ICU_stay_N)
+data_master_table<- read_excel("Master Table_Data Dictionary_12.2.22.xlsx")
+colnames(data_master_table)[1]<-'PATIENT_DEID'
+data_duplicateMed<-readRDS(file='DuplicateMed.rds')
+
+
+#taken in 72hours
+Taken_med_with_ICU_72h=merge(data_med_use,data_ICU_time,by="PATIENT_DEID",all.x=T,all.y=F)%>%
+  mutate(MAR_TAKEN_TIME_DEID=strptime(MAR_TAKEN_TIME_DEID,"%m/%d/%y %H:%M"),
+         start=strptime(start,"%Y-%m-%d %H:%M:%S"))%>%
+  filter(difftime(MAR_TAKEN_TIME_DEID,start,units="hours")<=72)
+
+
+#Filter med before ICU
+Taken_med_with_ICU_72h.0=Taken_med_with_ICU_72h%>%
+  filter(difftime(MAR_TAKEN_TIME_DEID,start,units="hours")>=0)
+
+
+#length(unique(Taken_med_with_ICU_72h.0$PATIENT_DEID))
+#length(unique(data_master_table$PATIENT_DEID))
+
+#Select the 991 patient in master table
+Taken_med_with_ICU_72h.1=Taken_med_with_ICU_72h.0%>%filter(PATIENT_DEID %in% data_master_table$PATIENT_DEID)
+
+length(unique(Taken_med_with_ICU_72h.1$PATIENT_DEID))
+length(unique(Taken_med_with_ICU_72h.1$NAME))
+
+#saveRDS(Taken_med_with_ICU_72h.1, file = "Taken_med_with_ICU_72h.1.rds")
+```
+
+```{r}
+#Now combine all the same name
+d<-dim(data_duplicateMed)
+for(i in 1:2){
+  for(j in 1:d[1]){
+    Taken_med_with_ICU_72h.1$NAME[Taken_med_with_ICU_72h.1$NAME==data_duplicateMed[j,i+1]]<-data_duplicateMed[j,1]
+  }
+}
+length(unique(Taken_med_with_ICU_72h.1$NAME))
+```
+
+```{r}
+#saveRDS(Taken_med_with_ICU_72h.1, file = "Taken_med_with_ICU_72h.2.rds")
+```
+
+
+```{r}
+Sliced_Med_data=list()
+Sliced_Med_data[[1]]=Taken_med_with_ICU_72h.1%>%
+    filter(difftime(MAR_TAKEN_TIME_DEID,start,units="hours")>=0&difftime(MAR_TAKEN_TIME_DEID,start,units="hours")<=1)
+for(i in 2:72){
+  Sliced_Med_data[[i]]=Taken_med_with_ICU_72h.1%>%
+    filter(difftime(MAR_TAKEN_TIME_DEID,start,units="hours")>(i-1)&difftime(MAR_TAKEN_TIME_DEID,start,units="hours")<=i)
+}
+```
+
+```{r}
+saveRDS(Sliced_Med_data, file = "72hrsMedDataLong1.rds")
+Sliced_Med_data<-readRDS(file = "72hrsMedDataLong1.rds")
+```
+
+```{r}
+write.xlsx(Sliced_Med_data,file='C:\\Users\\sd24973\\OneDrive - University of Georgia\\ShiyuanD\\DataProcessing\\HourlyData1.xlsx',rowNames=FALSE)
+```
+
+
+
+```{r}
+Sliced_Med_data_wide=list()
+for(i in 1:72){
+  Sliced_Med_data_wide[[i]]=Sliced_Med_data[[i]]%>%select(PATIENT_DEID,NAME)%>%mutate(freq=rep(1,dim(Sliced_Med_data[[i]])[1]))%>%
+  pivot_wider(names_from = NAME, values_from = freq,values_fn = sum,values_fill = 0)
+}
+```
+
+```{r}
+saveRDS(Sliced_Med_data_wide, file = "72hrsMedDataWide1.rds")
+Sliced_Med_data_wide<-readRDS(file = "72hrsMedDataWide1.rds")
+```
+
+```{r}
+write.xlsx(Sliced_Med_data_wide,file='C:\\Users\\sd24973\\OneDrive - University of Georgia\\ShiyuanD\\DataProcessing\\HourlyDataFreq1.xlsx',rowNames=FALSE)
+```
+
+
+```{r}
+# Merge data in one sheet
+
+# add "_i" in column names for discrimination
+for(i in 1:72){
+  colnames(Sliced_Med_data_wide[[i]])<-paste(colnames(Sliced_Med_data_wide[[i]]),i,sep = "_")
+  colnames(Sliced_Med_data_wide[[i]])[1]<-'PATIENT_DEID'
+}
+
+MedWide_72<-Sliced_Med_data_wide%>%reduce(full_join,by='PATIENT_DEID')
+
+```
+
+```{r}
+saveRDS(MedWide_72, file = "MedWide_72_1.rds")
+MedWide_72<-readRDS(file = "MedWide_72_1.rds")
+```
+
+```{r}
+write.xlsx(MedWide_72,file='C:\\Users\\sd24973\\OneDrive - University of Georgia\\ShiyuanD\\DataProcessing\\HourlyDataFreqWide1.xlsx',rowNames=FALSE)
+```

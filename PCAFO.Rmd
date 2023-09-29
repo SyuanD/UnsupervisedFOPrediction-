@@ -1,0 +1,220 @@
+---
+title: "PCAFO"
+output: html_document
+date: "2023-05-15"
+---
+
+```{r}
+setwd("~/Library/CloudStorage/OneDrive-UniversityofGeorgia/ShiyuanD/DataProcessing")
+
+library(dplyr)
+library(tidyverse)
+library(rpca)
+library(rospca)
+library(rrcov)
+library(PMA)
+```
+
+##Med IV
+```{r}
+IV_Med_Edits <- read_csv("IV Med List 5.11 KK Edits.csv")
+Med72hrs<-readRDS(file = "Taken_med_with_ICU_72h.2.rds")
+Med72hrsIV<-Med72hrs%>%filter(NAME %in% IV_Med_Edits$IV_Med)#edict med record
+saveRDS(Med72hrsIV,file="Med72hrsIV.rds")
+```
+
+## Hourly
+```{r}
+Sliced_Med_data=list()
+Sliced_Med_data[[1]]=Med72hrsIV%>%
+  filter(difftime(MAR_TAKEN_TIME_DEID,start,units="hours")>=0&difftime(MAR_TAKEN_TIME_DEID,start,units="hours")<=1)
+for(i in 2:72){
+  Sliced_Med_data[[i]]=Med72hrsIV%>%
+    filter(difftime(MAR_TAKEN_TIME_DEID,start,units="hours")>(i-1)&difftime(MAR_TAKEN_TIME_DEID,start,units="hours")<=i)
+}     
+
+saveRDS(Sliced_Med_data, file = "72hrsMedDataLong1IV2.0.rds")
+Sliced_Med_data<-readRDS(file = "72hrsMedDataLong1IV2.0.rds")
+
+Sliced_Med_data_wide=list()
+for(i in 1:72){
+  Sliced_Med_data_wide[[i]]=Sliced_Med_data[[i]]%>%select(PATIENT_DEID,NAME)%>%mutate(freq=rep(1,dim(Sliced_Med_data[[i]])[1]))%>%
+    pivot_wider(names_from = NAME, values_from = freq,values_fn = sum,values_fill = 0)
+}
+
+saveRDS(Sliced_Med_data_wide, file = "72hrsMedDataWide1IV2.0.rds")
+Sliced_Med_data_wide<-readRDS(file = "72hrsMedDataWide1IV2.0.rds")
+
+for(i in 1:72){
+  colnames(Sliced_Med_data_wide[[i]])<-paste(colnames(Sliced_Med_data_wide[[i]]),i,sep = "_")
+  colnames(Sliced_Med_data_wide[[i]])[1]<-'PATIENT_DEID'
+}
+
+MedWide_72<-Sliced_Med_data_wide%>%reduce(full_join,by='PATIENT_DEID')
+
+saveRDS(MedWide_72, file = "MedWide_72_1IV2.0.rds")
+MedWide_72<-readRDS(file = "MedWide_72_1IV2.0.rds")
+
+typeof(MedWide_72)
+Mat_Med1<-MedWide_72
+Mat_Med1<-apply(Mat_Med1, 2, as.numeric)[,-1]
+Mat_Med1[is.na(Mat_Med1)]<-0
+
+```
+
+## 2-Hour
+```{r}
+Sliced_Med_data=list()
+Sliced_Med_data[[1]]=Med72hrsIV%>%
+  filter(difftime(MAR_TAKEN_TIME_DEID,start,units="hours")>=0&difftime(MAR_TAKEN_TIME_DEID,start,units="hours")<=2)
+for(i in 2:36){
+  Sliced_Med_data[[i]]=Med72hrsIV%>%
+    filter(difftime(MAR_TAKEN_TIME_DEID,start,units="hours")>2*(i-1)&difftime(MAR_TAKEN_TIME_DEID,start,units="hours")<=2*i)
+}     
+
+saveRDS(Sliced_Med_data, file = "72hrsMedDataLong1IV3.0.rds")
+Sliced_Med_data<-readRDS(file = "72hrsMedDataLong1IV3.0.rds")
+
+Sliced_Med_data_wide=list()
+for(i in 1:36){
+  Sliced_Med_data_wide[[i]]=Sliced_Med_data[[i]]%>%select(PATIENT_DEID,NAME)%>%mutate(freq=rep(1,dim(Sliced_Med_data[[i]])[1]))%>%
+    pivot_wider(names_from = NAME, values_from = freq,values_fn = sum,values_fill = 0)
+}
+
+saveRDS(Sliced_Med_data_wide, file = "72hrsMedDataWide1IV3.0.rds")
+Sliced_Med_data_wide<-readRDS(file = "72hrsMedDataWide1IV3.0.rds")
+
+for(i in 1:36){
+  colnames(Sliced_Med_data_wide[[i]])<-paste(colnames(Sliced_Med_data_wide[[i]]),i,sep = "_")
+  colnames(Sliced_Med_data_wide[[i]])[1]<-'PATIENT_DEID'
+}
+
+MedWide_72<-Sliced_Med_data_wide%>%reduce(full_join,by='PATIENT_DEID')
+
+saveRDS(MedWide_72, file = "MedWide_72_1IV3.0.rds")
+MedWide_72<-readRDS(file = "MedWide_72_1IV3.0.rds")
+
+Mat_Med2<-MedWide_72
+Mat_Med2<-apply(Mat_Med2, 2, as.numeric)[,-1]
+Mat_Med2[is.na(Mat_Med2)]<-0
+```
+
+
+## 3-Hour
+
+```{r}
+Sliced_Med_data=list()
+Sliced_Med_data[[1]]=Med72hrsIV%>%
+  filter(difftime(MAR_TAKEN_TIME_DEID,start,units="hours")>=0&difftime(MAR_TAKEN_TIME_DEID,start,units="hours")<=2)
+for(i in 2:24){
+  Sliced_Med_data[[i]]=Med72hrsIV%>%
+    filter(difftime(MAR_TAKEN_TIME_DEID,start,units="hours")>3*(i-1)&difftime(MAR_TAKEN_TIME_DEID,start,units="hours")<=3*i)
+}     
+
+saveRDS(Sliced_Med_data, file = "72hrsMedDataLong1IV4.0.rds")
+Sliced_Med_data<-readRDS(file = "72hrsMedDataLong1IV4.0.rds")
+
+Sliced_Med_data_wide=list()
+for(i in 1:24){
+  Sliced_Med_data_wide[[i]]=Sliced_Med_data[[i]]%>%select(PATIENT_DEID,NAME)%>%mutate(freq=rep(1,dim(Sliced_Med_data[[i]])[1]))%>%
+    pivot_wider(names_from = NAME, values_from = freq,values_fn = sum,values_fill = 0)
+}
+
+saveRDS(Sliced_Med_data_wide, file = "72hrsMedDataWide1IV4.0.rds")
+Sliced_Med_data_wide<-readRDS(file = "72hrsMedDataWide1IV4.0.rds")
+
+for(i in 1:24){
+  colnames(Sliced_Med_data_wide[[i]])<-paste(colnames(Sliced_Med_data_wide[[i]]),i,sep = "_")
+  colnames(Sliced_Med_data_wide[[i]])[1]<-'PATIENT_DEID'
+}
+
+MedWide_72<-Sliced_Med_data_wide%>%reduce(full_join,by='PATIENT_DEID')
+
+saveRDS(MedWide_72, file = "MedWide_72_1IV4.0.rds")
+MedWide_72<-readRDS(file = "MedWide_72_1IV4.0.rds")
+
+
+
+Mat_Med3<-MedWide_72
+Mat_Med3<-apply(Mat_Med3, 2, as.numeric)[,-1]
+Mat_Med3[is.na(Mat_Med3)]<-0
+
+write.csv(Mat_Med3,'3hourMed.csv')
+write.table(Mat_Med3,'3hourMed.csv')
+```
+
+## PCA
+```{r}
+dim(Mat_Med1)
+dim(Mat_Med2)
+dim(Mat_Med3)
+```
+
+### 3-hour PCA
+```{r}
+cv.out <- SPC.cv(Mat_Med3, sumabsvs=seq(1.2, sqrt(ncol(Mat_Med3)), len=6))
+print(cv.out)
+plot(cv.out)
+cv.out$bestsumabsv
+#19.60491
+out <- SPC(Mat_Med3,sumabsv=cv.out$bestsumabsv, K=200)
+#saveRDS(out,file = 'PCAresult.rds')
+out<-readRDS(file ='PCAresult.rds' )
+out$prop.var.explained
+
+PC<-round(out$v,4)[,1:165]
+dim(PC)
+PC1<-PC[,1]
+sum(PC==0)# 161274
+
+
+MedName<-colnames(Mat_Med3)
+heatmap(PC)
+```
+
+```{r}
+PC_YN<-list()
+for (i in 1:165) {
+  PC_YN[[i]]<-1-ifelse(PC[,i]==0,1,0)
+}
+PP<-data.frame(PC_YN)
+colnames(PP)<-1:165
+PP<-apply(PP,2,as.numeric)
+heatmap(PP,Colv=NA)
+```
+
+## RBM
+```{r}
+#install.packages("deepnet")
+library(deepnet)
+r1<-rbm.train(PP,100, numepochs = 20, cd = 10)
+View(r1$W)
+r1$size
+```
+
+```{r}
+install.packages("remotes")
+remotes::install_github("TimoMatzen/RBM")
+```
+
+```{r}
+r2<-RBM::RBM(PP,n.iter = 1000, n.hidden = 10, learning.rate = 0.1,
+plot = TRUE, size.minibatch = 10, momentum = 0.5, lambda = 0.001)
+
+```
+
+```{r}
+install.packages("remotes")
+remotes::install_github("zachmayer/rbm")
+
+```
+
+```{r}
+#install.packages("RSNNS")
+library(RSNNS)
+getWeightMatrix(2229,)
+```
+
+
+## FO value
+

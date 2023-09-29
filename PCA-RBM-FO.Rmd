@@ -1,0 +1,142 @@
+---
+title: "PCA-RBM-FO"
+output: html_document
+date: "2023-05-15"
+---
+
+```{r}
+setwd("~/Library/CloudStorage/OneDrive-UniversityofGeorgia/ShiyuanD/DataProcessing")
+library(dplyr)
+library(tidyverse)
+library(rpca)
+library(rospca)
+library(rrcov)
+library(PMA)
+library("FactoMineR")
+library("factoextra")
+library(logisticPCA)
+library(ggplot2)
+library(rARPACK)
+library(deepnet)
+```
+
+## Data Preparation
+```{r}
+## 3hourData
+MedWide_72<-readRDS(file = "MedWide_72_1IV4.0.rds")
+Mat_Med3<-MedWide_72
+PatientList<-MedWide_72$PATIENT_DEID
+Mat_Med3<-apply(Mat_Med3, 2, as.numeric)[,-1]
+Mat_Med3[is.na(Mat_Med3)]<-0
+```
+
+## PCA
+```{r}
+#First, conduct a PCA
+rownames(Mat_Med3)<-PatientList
+sum(Mat_Med3==0)#2073041/2099718=0.987295
+#cdplot(Mat_Med3)
+#Mat_Med3.1<-apply(Mat_Med3.1, 2, as.numeric)
+N<-colSums(Mat_Med3.1==0)
+Y<-colSums(Mat_Med3.1==1)
+freqYN<-as.matrix(rbind(Y,N))
+heatmap(freqYN,Colv = FALSE,Rowv = FALSE)
+
+Pca<-PCA(Mat_Med3,graph = FALSE)
+summary(Pca)
+Pca$var
+
+```
+
+## SPCA
+```{r}
+cv.out <- SPC.cv(Mat_Med3, sumabsvs=seq(1.2, sqrt(ncol(Mat_Med3)), len=6))
+print(cv.out)
+plot(cv.out)
+
+out <- SPC(Mat_Med3,sumabsv=19.60491, K=200)
+out$prop.var.explained
+#saveRDS(out,file = 'PCAresult.rds')
+#out<-readRDS(file ='PCAresult.rds' )
+#out$prop.var.explained
+out<-readRDS(file ='PCAresult.rds' )
+out$prop.var.explained
+dim(out$v)
+PC<-round(out$v,2)[,1:165]
+dim(PC)
+PC1<-PC[,1]
+sum(PC==0)
+# 161274/(2229*200)=0.3617631 4digits
+# 175017/(2229*200)= 0.3925908 3digits
+# 252142/(2229*200)=0.5655944 2digits
+
+```
+
+#RBM
+```{r}
+#choice #of clusters
+r1<-rbm.train(t(PC),30, numepochs = 500, cd = 10)
+w1<-r1$W
+view(w1)
+r1.up<-rbm.up(r1,t(PC))
+#apply(r1.up, 1, self)
+
+r2<-rbm.train(t(PC),60, numepochs = 500, cd = 10)
+r2.up<-rbm.up(r2,t(PC))
+
+r3<-rbm.train(t(PC),15, numepochs = 500, cd = 10)
+r3.up<-rbm.up(r3,t(PC))
+
+####<100 for clusters
+### Overlap 40% 35-15%
+
+view(r1.up)
+dim(PC) #2229*165
+dim(w1) #15*2229
+dim(r1.up) #165  15
+```
+
+```{r}
+med_list<-colnames(Mat_Med3)
+PC01<-replace(PC,PC!=0,1)
+PC01<-replace(PC01,PC==0,0)
+
+```
+
+
+
+```{r}
+#get Clusters
+r1.bin<-replace(r1.up,r1.up>0.999,1)
+r1.bin<-replace(r1.bin,r1.bin<=0.999,0)
+heatmap(r1.bin,Colv = FALSE,Rowv = FALSE)
+heatmap(r1.up,Colv = FALSE,Rowv = FALSE)
+
+med_clust<-matrix(data=rep(med_list,30),nrow=2229)
+med_clust1<-list()
+for (j in 1:30) {
+  #j=15
+  ci<-which(r1.bin[,j]>0)
+  L<-length(ci)
+  medi<-PC01[,ci]
+  yn<-which(apply(medi, 1, sum)>0)
+  med_clust1[[j]]<-med_list[yn]
+}
+
+
+pc.clust<-data.frame()
+for (i in 1:2229) {
+  for (j in 1:30) {
+    #i=1
+    
+    
+  }
+}
+```
+
+# hericical clustering 
+```{r}
+rownames(PC)<-med_list
+heatmap(PC)
+```
+

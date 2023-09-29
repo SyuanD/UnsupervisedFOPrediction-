@@ -1,0 +1,187 @@
+---
+title: "Fluid Overload Creation"
+author: "Tianyi Zhang"
+date: "2023-03-04"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+setwd("~/Library/CloudStorage/OneDrive-UniversityofGeorgia/ShiyuanD/DataProcessing")
+library(readr)
+library(dplyr)
+suppressMessages(library("readxl"))
+flowsheets_alt<- read_csv("flowsheets_w_ht_wt.csv",
+                      col_types = cols(MEAS_VALUE = col_character()))
+ICU_stay_time=read_csv("ICU Stay Time.csv")
+#patient=(ICU_stay_time%>%filter(end-start>2))$PATIENT_DEID
+#patients=(data_fluid.overload%>%filter(!is.na(fluid_overload)))$PATIENT_DEID
+#patients%in%patient
+flowsheets_alt = left_join(flowsheets_alt,ICU_stay_time)
+
+data_my=read.csv("fluid_all.csv",header=T)
+data_xl=read_excel(path="master_table_0608.xlsx",sheet="Sheet1",
+                   range="A1:AY992",col_names=T,na="NA")
+id_remove=data_my$PATIENT_DEID[!data_my$PATIENT_DEID%in%data_xl$PATIENT_DEID]
+```
+
+# Fluid Overload
+
+## Fluid Overload based on weight
+
+Definition: a patient experienced fluid overload when the maximum weight measure in the ICU is at least 110% of the admission weight/ the very first weight measure available. 
+
+Note: admission weight is at admission, not from the start of ICU.
+
+Weight info: 
+- In the flowsheets_w_ht_wt.csv file (object name: flowsheets_alt)
+- unit: oz; need to tranform to kg (formula oz to kg: divide the mass value by 35.274)
+- we only have weight measurement for 992 patients
+- only 947 patients have weight records when they were the ICU
+(* only 865 records in the flowsheets file updated on 2021_11_24????)
+
+```{r}
+require(tidyverse)
+weight_ICU =  flowsheets_alt%>%filter(str_detect(FLO_MEAS_NAME,"WEIGHT"))%>%
+  mutate(weight = as.numeric(MEAS_VALUE)) %>%
+  dplyr::select(PATIENT_DEID,RECORDED_TIME_DEID,weight,start,end) %>%
+  mutate(weight_kg = weight/35.274)%>%
+  filter(weight_kg > 1)%>%
+  filter(#(difftime(RECORDED_TIME_DEID,start,units="hours")>48),
+         (difftime(end,RECORDED_TIME_DEID,units="hours")>=0),
+         (difftime(RECORDED_TIME_DEID,start,units="hours")<=72)
+         )
+
+weight_max_ICU = weight_ICU%>%
+  group_by(PATIENT_DEID) %>% 
+  summarise(max_ICU_weight = max(weight_kg))
+
+weight_admission = flowsheets_alt%>%filter(str_detect(FLO_MEAS_NAME,"WEIGHT"))%>%
+  mutate(weight = as.numeric(MEAS_VALUE)) %>%
+  dplyr::select(PATIENT_DEID,RECORDED_TIME_DEID,weight)%>%
+  mutate(weight_kg = weight/35.274)%>%
+  filter(weight_kg > 1)%>%
+  group_by(PATIENT_DEID) %>% 
+  summarise(earliest_record = min(RECORDED_TIME_DEID), 
+            admission_weight_kg = weight_kg[RECORDED_TIME_DEID==earliest_record])%>%
+  dplyr::select(PATIENT_DEID,admission_weight_kg)%>%
+  filter(!PATIENT_DEID%in%id_remove)
+
+length(unique(weight_ICU$PATIENT_DEID))
+length(unique(weight_admission$PATIENT_DEID))
+
+
+```
+
+
+Fluid overload:
+
+Among all patients, 101 patients have fluid overload, 764 did not, and we don't have weight records to determine the state of fluid for the rest.
+
+```{r}
+fluid_wt = full_join(weight_admission,weight_max_ICU, by ="PATIENT_DEID" )%>%
+  mutate(fluid_overload_wt = max_ICU_weight/admission_weight_kg)%>%
+  dplyr::select(PATIENT_DEID,fluid_overload_wt)
+```
+
+
+For the 991 patients:
+- 101 had fluid overload
+- 760 did not have fluid overload
+- 130 have no weight records in ICU to determine fluid status.
+
+
+## Fluid Overload based on volumn
+
+
+From the I_O_data file
+
+Instruction:
+- net fluid balance after day 1, day 2, etc. in mL (a positive or negative volume in milliliters)
+
+- presence or absence of fluid overload after day 1, day 2, etc. (0 = absence, 1 = presence, presence being defined by an amount > 10% of their admission weight in milliliters). 
+
+
+Problem: unit mL vs 0.1\*kg
+Check with Andrea (04/03): unit L vs 0.1\* kg
+
+Another issue: daily net or cumulative. Multiple daily net values.
+
+
+```{r}
+I_O_data = read_csv("I_O_data.csv")
+
+fluid_balance = I_O_data%>%filter(!is.na(IO_ID))%>%dplyr::select(PATIENT_DEID,RECORDED_DATE_DEID,DAILY_NET)%>%distinct()
+fluid_balance = left_join(fluid_balance,ICU_stay_time)%>%
+  filter(RECORDED_DATE_DEID>=as.Date(start),
+       #RECORDED_DATE_DEID>=as.Date(start)+2, 
+         RECORDED_DATE_DEID<=as.Date(end),
+         RECORDED_DATE_DEID<=as.Date(start)+3
+         )%>%
+  arrange(PATIENT_DEID,RECORDED_DATE_DEID)%>%group_by(PATIENT_DEID)%>%
+  mutate(cum_fluid = cumsum(DAILY_NET))%>%group_by(PATIENT_DEID,RECORDED_DATE_DEID)%>%
+  mutate(cum_fluid_daily_total = max(cum_fluid),
+            start = start)%>%distinct()
+
+max_fluid_in_ICU = fluid_balance%>%
+  group_by(PATIENT_DEID)%>%
+  summarise(max_fluid_ICU = max(cum_fluid_daily_total,na.rm = T))
+
+fluid_volume = left_join(max_fluid_in_ICU, weight_admission)%>%
+  mutate(fluid_overload_volume = 1+max_fluid_ICU/(admission_weight_kg*1000))%>%
+  dplyr::select(PATIENT_DEID,fluid_overload_volume)
+```
+
+```{r}
+fluid_overload=full_join(fluid_wt,fluid_volume, by ="PATIENT_DEID")%>%
+  filter(!PATIENT_DEID%in%id_remove)
+fluid_overload ##NA?
+```
+
+
+
+
+114 no, 872 yes, 8 unknown (comparing mL to 0.1 weight in kg)
+
+969 no, 17 yes, 8 unknown.
+
+875 no, 105 yes, 8 unknown. (cumulative balance)
+
+
+
+
+## combine the two conditions
+
+rule: 
+- TRUE = TRUE and whatever (FALSE/missing)
+- FALSE = FALSE and FALSE
+- unknown = the rest combination
+
+
+```{r}
+fluid_overload1.1%>%
+  filter(fluid_overload_volume>=1.1)
+fluid_overload1.07%>%
+  filter(fluid_overload_volume>=1.07)
+
+fluid_all = full_join(fluid_wt,fluid_volume1.1,fluid_volume1.07)%>%
+  mutate(fluid_overload_volume_nu = as.numeric(fluid_overload_volume))%>%
+  mutate(fluid_overload_wt_nu =as.numeric(fluid_overload_volume))%>%
+  mutate(fluid_overload = fluid_overload_volume|fluid_overload_wt)%>%
+  mutate(fluid_overload = ifelse(fluid_overload>=1,1, fluid_overload))%>%
+  dplyr::select(PATIENT_DEID,fluid_overload, fluid_overload_volume,fluid_overload_wt)
+
+
+#master_sheet = left_join(master_sheet,fluid_all)
+
+
+table(fluid_all$fluid_overload, useNA = "ifany")
+
+prop.table(table(fluid_all$fluid_overload))
+
+saveRDS(fluid_all,file='fo.rds')
+```
+
